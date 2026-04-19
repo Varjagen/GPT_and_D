@@ -1,0 +1,1590 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Crown,
+  Users,
+  Eye,
+  EyeOff,
+  ScrollText,
+  Map,
+  Swords,
+  Save,
+  Upload,
+  Download,
+  Plus,
+  Search,
+  Shield,
+  Heart,
+  Move,
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  Lock,
+  Unlock,
+  LogOut,
+  RefreshCw,
+  Sparkles,
+  Skull,
+  UserCircle2,
+  GripVertical,
+  Compass,
+  Filter,
+  X,
+  Pencil,
+  Trash2,
+  Wand2,
+  Wifi,
+  WifiOff,
+  PanelLeft,
+  PanelRight,
+} from "lucide-react";
+
+const CONDITIONS = [
+  "Blinded",
+  "Charmed",
+  "Deafened",
+  "Frightened",
+  "Grappled",
+  "Incapacitated",
+  "Invisible",
+  "Paralyzed",
+  "Petrified",
+  "Poisoned",
+  "Prone",
+  "Restrained",
+  "Stunned",
+  "Unconscious",
+  "Dead",
+];
+
+const fantasyTitle = "font-serif tracking-wide";
+const mono = "font-mono text-[12px]";
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+const defaultStats = () => ({
+  STR: 10,
+  DEX: 10,
+  CON: 10,
+  INT: 10,
+  WIS: 10,
+  CHA: 10,
+  CUSTOM: 0,
+});
+
+const demoMapId = "map-demo";
+
+const initialData = {
+  meta: {
+    sessionName: "Moonlit Vale",
+    schemaVersion: 1,
+    localDmPassword: "",
+    authMode: "local-simple",
+    lastUpdated: Date.now(),
+  },
+  ui: {
+    forcedMapId: null,
+    forcedViewEnabled: false,
+    showAllPcsToPlayers: true,
+    activeMapId: demoMapId,
+    syncNonce: uid(),
+  },
+  maps: [
+    {
+      id: demoMapId,
+      name: "Moonlit Ruins",
+      type: "dungeon",
+      parentId: null,
+      imageUrl:
+        "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=1600&q=80",
+      notes: "A ruined temple beneath a violet sky.",
+      viewport: { x: 0, y: 0, zoom: 1 },
+    },
+    {
+      id: "map-region",
+      name: "Northern Marches",
+      type: "region",
+      parentId: null,
+      imageUrl:
+        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
+      notes: "Regional travel map.",
+      viewport: { x: 0, y: 0, zoom: 1 },
+    },
+  ],
+  entities: [
+    {
+      id: "pc-1",
+      name: "Lyra Dawnmantle",
+      type: "PC",
+      color: "#7dd3fc",
+      AC: 16,
+      hp: { current: 24, max: 28 },
+      speed: 30,
+      initiativeBonus: 3,
+      passivePerception: 15,
+      conditions: [],
+      notes: "Owns the silver key to the western crypt.",
+      stats: { ...defaultStats(), DEX: 16, WIS: 14 },
+      class: "Cleric",
+      level: 4,
+      playerName: "Ari",
+    },
+    {
+      id: "pc-2",
+      name: "Thorn Vale",
+      type: "PC",
+      color: "#c4b5fd",
+      AC: 14,
+      hp: { current: 31, max: 31 },
+      speed: 35,
+      initiativeBonus: 4,
+      passivePerception: 13,
+      conditions: [],
+      notes: "Scout of the Ashwood road.",
+      stats: { ...defaultStats(), DEX: 18, STR: 12 },
+      class: "Ranger",
+      level: 4,
+      playerName: "Mira",
+    },
+    {
+      id: "npc-1",
+      name: "Brother Cael",
+      type: "NPC",
+      color: "#facc15",
+      AC: 12,
+      hp: { current: 11, max: 11 },
+      speed: 30,
+      initiativeBonus: 0,
+      passivePerception: 12,
+      conditions: [],
+      notes: "Knows the prayer that opens the inner sanctum.",
+      stats: { ...defaultStats(), WIS: 14, CHA: 13 },
+      faction: "Temple Remnants",
+      role: "Guide",
+    },
+    {
+      id: "mon-1",
+      name: "Crypt Stalker",
+      type: "Monster",
+      color: "#ef4444",
+      AC: 15,
+      hp: { current: 22, max: 22 },
+      speed: 40,
+      initiativeBonus: 2,
+      passivePerception: 14,
+      conditions: [],
+      notes: "Hunts by sound.",
+      stats: { ...defaultStats(), DEX: 14, CON: 15 },
+      CR: "2",
+      abilities: "Shadow pounce, keen hearing",
+    },
+  ],
+  tokens: [
+    { id: "tok-1", entityId: "pc-1", mapId: demoMapId, x: 22, y: 44, visible: true },
+    { id: "tok-2", entityId: "pc-2", mapId: demoMapId, x: 33, y: 56, visible: true },
+    { id: "tok-3", entityId: "npc-1", mapId: demoMapId, x: 41, y: 34, visible: true },
+    { id: "tok-4", entityId: "mon-1", mapId: demoMapId, x: 68, y: 36, visible: false },
+  ],
+  initiative: {
+    active: false,
+    entries: [],
+    currentIndex: 0,
+    round: 1,
+  },
+  presets: [],
+  playerClaims: {},
+};
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem("rpg-vtt-state-v1");
+    if (!raw) return initialData;
+    const parsed = JSON.parse(raw);
+    return { ...initialData, ...parsed };
+  } catch {
+    return initialData;
+  }
+}
+
+function saveData(data) {
+  localStorage.setItem("rpg-vtt-state-v1", JSON.stringify(data));
+  localStorage.setItem("rpg-vtt-sync-ping", String(Date.now()));
+}
+
+function deepClone(v) {
+  return JSON.parse(JSON.stringify(v));
+}
+
+function useSessionStore() {
+  const [data, setData] = useState(loadData);
+  const channelRef = useRef(null);
+  const [syncOnline, setSyncOnline] = useState(true);
+
+  useEffect(() => {
+    saveData(data);
+    if (channelRef.current) {
+      channelRef.current.postMessage({ type: "state-update", payload: data });
+    }
+  }, [data]);
+
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "rpg-vtt-state-v1") {
+        try {
+          const next = JSON.parse(e.newValue || "null");
+          if (next) setData(next);
+        } catch {}
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+
+    try {
+      const ch = new BroadcastChannel("rpg-vtt-sync");
+      channelRef.current = ch;
+      ch.onmessage = (msg) => {
+        if (msg.data?.type === "state-update") {
+          setData(msg.data.payload);
+          setSyncOnline(true);
+        }
+      };
+    } catch {
+      setSyncOnline(false);
+    }
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      if (channelRef.current) channelRef.current.close();
+    };
+  }, []);
+
+  const update = (updater) => {
+    setData((prev) => {
+      const draft = deepClone(prev);
+      const next = typeof updater === "function" ? updater(draft) || draft : updater;
+      next.meta.lastUpdated = Date.now();
+      next.ui.syncNonce = uid();
+      return next;
+    });
+  };
+
+  return { data, update, syncOnline, setData };
+}
+
+function shapeForType(type) {
+  if (type === "PC") return "circle";
+  if (type === "Monster") return "diamond";
+  return "square";
+}
+
+function entityLabel(entity) {
+  if (!entity) return "Unknown";
+  const suffix =
+    entity.type === "PC"
+      ? `${entity.class || "Class"} ${entity.level || 1}`
+      : entity.type === "Monster"
+      ? `CR ${entity.CR || "?"}`
+      : entity.role || "NPC";
+  return `${entity.name} • ${suffix}`;
+}
+
+function sortInitiative(entries, entitiesById) {
+  return [...entries].sort((a, b) => {
+    if (b.roll !== a.roll) return b.roll - a.roll;
+    const eb = entitiesById[b.entityId];
+    const ea = entitiesById[a.entityId];
+    if ((eb?.initiativeBonus || 0) !== (ea?.initiativeBonus || 0)) {
+      return (eb?.initiativeBonus || 0) - (ea?.initiativeBonus || 0);
+    }
+    return (ea?.name || "").localeCompare(eb?.name || "");
+  });
+}
+
+function modFromStat(v) {
+  return Math.floor((Number(v || 10) - 10) / 2);
+}
+
+function isEntityVisibleToPlayer(entity, token, session) {
+  if (!entity || !token) return false;
+  if (entity.type === "PC" && session.ui.showAllPcsToPlayers) return true;
+  return !!token.visible;
+}
+
+function getVisibleTokens(session, role, claimedEntityId) {
+  return session.tokens.filter((t) => {
+    const e = session.entities.find((x) => x.id === t.entityId);
+    if (role === "dm") return true;
+    if (!e) return false;
+    if (claimedEntityId && e.id === claimedEntityId) return true;
+    return isEntityVisibleToPlayer(e, t, session);
+  });
+}
+
+function getVisibleEntitiesForPlayer(session, claimedEntityId) {
+  const tokenMap = Object.fromEntries(session.tokens.map((t) => [t.entityId, t]));
+  return session.entities.filter((e) => {
+    const token = tokenMap[e.id];
+    if (claimedEntityId && e.id === claimedEntityId) return true;
+    return token && isEntityVisibleToPlayer(e, token, session);
+  });
+}
+
+function AppShell() {
+  const { data, update, syncOnline, setData } = useSessionStore();
+  const [role, setRole] = useState(() => localStorage.getItem("rpg-vtt-role") || "player");
+  const [dmPasswordInput, setDmPasswordInput] = useState("");
+  const [showAuth, setShowAuth] = useState(() => !localStorage.getItem("rpg-vtt-role"));
+  const [claimedEntityId, setClaimedEntityId] = useState(() => localStorage.getItem("rpg-vtt-claim") || "");
+  const [selectedEntityId, setSelectedEntityId] = useState("");
+  const [selectedTokenId, setSelectedTokenId] = useState("");
+  const [entitySearch, setEntitySearch] = useState("");
+  const [entityTypeFilter, setEntityTypeFilter] = useState("ALL");
+  const [conditionFilter, setConditionFilter] = useState("ALL");
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [dragEntityId, setDragEntityId] = useState(null);
+  const [editingEntityId, setEditingEntityId] = useState(null);
+  const [editingMapId, setEditingMapId] = useState(null);
+  const [playerNameInput, setPlayerNameInput] = useState("");
+  const [mapTool, setMapTool] = useState("select");
+  const [showPresetPanel, setShowPresetPanel] = useState(false);
+  const [showMapPanel, setShowMapPanel] = useState(false);
+  const [showInitiativePanel, setShowInitiativePanel] = useState(true);
+
+  useEffect(() => {
+    localStorage.setItem("rpg-vtt-role", role);
+  }, [role]);
+
+  useEffect(() => {
+    localStorage.setItem("rpg-vtt-claim", claimedEntityId || "");
+  }, [claimedEntityId]);
+
+  const activeMapId = role === "player" && data.ui.forcedViewEnabled && data.ui.forcedMapId ? data.ui.forcedMapId : data.ui.activeMapId;
+  const activeMap = data.maps.find((m) => m.id === activeMapId) || data.maps[0];
+  const entitiesById = useMemo(() => Object.fromEntries(data.entities.map((e) => [e.id, e])), [data.entities]);
+  const tokensOnMap = getVisibleTokens(data, role, claimedEntityId).filter((t) => t.mapId === activeMapId);
+  const allTokensOnMapDm = data.tokens.filter((t) => t.mapId === activeMapId);
+  const selectedEntity = data.entities.find((e) => e.id === (selectedEntityId || entitiesById[data.tokens.find((t) => t.id === selectedTokenId)?.entityId]?.id));
+  const selectedToken = data.tokens.find((t) => t.id === selectedTokenId) || (selectedEntity ? data.tokens.find((t) => t.entityId === selectedEntity.id && t.mapId === activeMapId) : null);
+  const playerVisibleEntities = getVisibleEntitiesForPlayer(data, claimedEntityId);
+
+  const filteredEntities = data.entities.filter((e) => {
+    const matchSearch = e.name.toLowerCase().includes(entitySearch.toLowerCase()) || (e.notes || "").toLowerCase().includes(entitySearch.toLowerCase());
+    const matchType = entityTypeFilter === "ALL" || e.type === entityTypeFilter;
+    const matchCondition = conditionFilter === "ALL" || e.conditions.includes(conditionFilter);
+    return matchSearch && matchType && matchCondition;
+  });
+
+  const breadcrumb = useMemo(() => {
+    if (!activeMap) return [];
+    const out = [];
+    let current = activeMap;
+    while (current) {
+      out.unshift(current);
+      current = data.maps.find((m) => m.id === current.parentId);
+    }
+    return out;
+  }, [data.maps, activeMap]);
+
+  function ensureDmAccess() {
+    if (role !== "dm") return false;
+    return true;
+  }
+
+  function setActiveMap(mapId) {
+    update((draft) => {
+      draft.ui.activeMapId = mapId;
+    });
+  }
+
+  function doDmLogin() {
+    const configured = data.meta.localDmPassword;
+    if (!configured) {
+      update((draft) => {
+        draft.meta.localDmPassword = dmPasswordInput;
+      });
+      setRole("dm");
+      setShowAuth(false);
+      return;
+    }
+    if (dmPasswordInput === configured) {
+      setRole("dm");
+      setShowAuth(false);
+    }
+  }
+
+  function enterPlayerMode() {
+    setRole("player");
+    setShowAuth(false);
+  }
+
+  function logout() {
+    setShowAuth(true);
+    setRole("player");
+  }
+
+  function createEntity(type = "PC") {
+    if (!ensureDmAccess()) return;
+    const id = uid();
+    update((draft) => {
+      draft.entities.unshift({
+        id,
+        name: type === "Monster" ? "New Monster" : type === "NPC" ? "New NPC" : "New PC",
+        type,
+        color: type === "Monster" ? "#ef4444" : type === "NPC" ? "#facc15" : "#60a5fa",
+        AC: 10,
+        hp: { current: 10, max: 10 },
+        speed: 30,
+        initiativeBonus: 0,
+        passivePerception: 10,
+        conditions: [],
+        notes: "",
+        stats: defaultStats(),
+        ...(type === "PC" ? { class: "Fighter", level: 1, playerName: "" } : {}),
+        ...(type === "Monster" ? { CR: "1", abilities: "" } : {}),
+        ...(type === "NPC" ? { faction: "", role: "" } : {}),
+      });
+    });
+    setEditingEntityId(id);
+    setSelectedEntityId(id);
+  }
+
+  function createPcAsPlayer() {
+    const id = uid();
+    update((draft) => {
+      draft.entities.unshift({
+        id,
+        name: playerNameInput ? `${playerNameInput}'s Hero` : "Wandering Hero",
+        type: "PC",
+        color: "#93c5fd",
+        AC: 10,
+        hp: { current: 12, max: 12 },
+        speed: 30,
+        initiativeBonus: 1,
+        passivePerception: 10,
+        conditions: [],
+        notes: "",
+        stats: defaultStats(),
+        class: "Adventurer",
+        level: 1,
+        playerName: playerNameInput || "Player",
+      });
+    });
+    setClaimedEntityId(id);
+  }
+
+  function updateEntity(entityId, patch) {
+    update((draft) => {
+      const e = draft.entities.find((x) => x.id === entityId);
+      if (!e) return;
+      Object.assign(e, typeof patch === "function" ? patch(e) : patch);
+    });
+  }
+
+  function deleteEntity(entityId) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      draft.entities = draft.entities.filter((e) => e.id !== entityId);
+      draft.tokens = draft.tokens.filter((t) => t.entityId !== entityId);
+      draft.initiative.entries = draft.initiative.entries.filter((x) => x.entityId !== entityId);
+      Object.keys(draft.playerClaims).forEach((k) => {
+        if (draft.playerClaims[k] === entityId) delete draft.playerClaims[k];
+      });
+    });
+    if (selectedEntityId === entityId) setSelectedEntityId("");
+  }
+
+  function adjustHp(entityId, delta) {
+    update((draft) => {
+      const e = draft.entities.find((x) => x.id === entityId);
+      if (!e) return;
+      e.hp.current = clamp(e.hp.current + delta, 0, e.hp.max);
+      const dead = e.hp.current === 0;
+      if (dead && !e.conditions.includes("Dead")) e.conditions.push("Dead");
+      if (!dead) e.conditions = e.conditions.filter((c) => c !== "Dead");
+    });
+  }
+
+  function toggleCondition(entityId, condition) {
+    update((draft) => {
+      const e = draft.entities.find((x) => x.id === entityId);
+      if (!e) return;
+      e.conditions = e.conditions.includes(condition)
+        ? e.conditions.filter((c) => c !== condition)
+        : [...e.conditions, condition];
+    });
+  }
+
+  function placeToken(entityId, x, y) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      const exists = draft.tokens.find((t) => t.entityId === entityId && t.mapId === activeMapId);
+      if (exists) return;
+      draft.tokens.push({ id: uid(), entityId, mapId: activeMapId, x, y, visible: false });
+    });
+  }
+
+  function removeToken(tokenId) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      draft.tokens = draft.tokens.filter((t) => t.id !== tokenId);
+    });
+  }
+
+  function moveToken(tokenId, x, y) {
+    update((draft) => {
+      const token = draft.tokens.find((t) => t.id === tokenId);
+      if (!token) return;
+      token.x = clamp(x, 2, 98);
+      token.y = clamp(y, 2, 98);
+    });
+  }
+
+  function setTokenVisible(tokenId, visible) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      const token = draft.tokens.find((t) => t.id === tokenId);
+      if (token) token.visible = visible;
+    });
+  }
+
+  function bulkVisibility(next) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      draft.tokens.forEach((t) => {
+        if (t.mapId === activeMapId) t.visible = next;
+      });
+    });
+  }
+
+  function claimPc(entityId) {
+    setClaimedEntityId(entityId);
+  }
+
+  function canPlayerMoveToken(token) {
+    const entity = entitiesById[token.entityId];
+    if (!entity) return false;
+    return role === "player" && entity.id === claimedEntityId && entity.type === "PC";
+  }
+
+  function startInitiative(autoRoll = true) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      const entitiesOnMap = draft.tokens
+        .filter((t) => t.mapId === activeMapId)
+        .map((t) => draft.entities.find((e) => e.id === t.entityId))
+        .filter(Boolean);
+      let entries = entitiesOnMap.map((entity) => ({
+        id: uid(),
+        entityId: entity.id,
+        roll: autoRoll ? Math.ceil(Math.random() * 20) + Number(entity.initiativeBonus || 0) : 10 + Number(entity.initiativeBonus || 0),
+      }));
+      const byId = Object.fromEntries(draft.entities.map((e) => [e.id, e]));
+      entries = sortInitiative(entries, byId);
+      draft.initiative = { active: true, entries, currentIndex: 0, round: 1 };
+    });
+  }
+
+  function advanceTurn() {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      if (!draft.initiative.entries.length) return;
+      const next = draft.initiative.currentIndex + 1;
+      if (next >= draft.initiative.entries.length) {
+        draft.initiative.currentIndex = 0;
+        draft.initiative.round += 1;
+      } else {
+        draft.initiative.currentIndex = next;
+      }
+    });
+  }
+
+  function stopInitiative() {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      draft.initiative = { active: false, entries: [], currentIndex: 0, round: 1 };
+    });
+  }
+
+  function savePreset() {
+    if (!ensureDmAccess()) return;
+    const name = prompt("Preset name");
+    if (!name) return;
+    update((draft) => {
+      const snapshot = {
+        id: uid(),
+        name,
+        mapId: activeMapId,
+        tokens: draft.tokens.filter((t) => t.mapId === activeMapId).map((t) => ({ ...t })),
+      };
+      draft.presets.unshift(snapshot);
+    });
+  }
+
+  function loadPreset(presetId) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      const preset = draft.presets.find((p) => p.id === presetId);
+      if (!preset) return;
+      draft.tokens = draft.tokens.filter((t) => t.mapId !== preset.mapId).concat(preset.tokens.map((t) => ({ ...t, id: uid() })));
+      draft.ui.activeMapId = preset.mapId;
+    });
+  }
+
+  function overwritePreset(presetId) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      const preset = draft.presets.find((p) => p.id === presetId);
+      if (!preset) return;
+      preset.mapId = activeMapId;
+      preset.tokens = draft.tokens.filter((t) => t.mapId === activeMapId).map((t) => ({ ...t }));
+    });
+  }
+
+  function deletePreset(presetId) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      draft.presets = draft.presets.filter((p) => p.id !== presetId);
+    });
+  }
+
+  function exportSession() {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.meta.sessionName.replace(/\s+/g, "-").toLowerCase()}-session.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importSession(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        setData(parsed);
+      } catch {
+        alert("Invalid session file");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function createMap() {
+    if (!ensureDmAccess()) return;
+    const id = uid();
+    update((draft) => {
+      draft.maps.push({
+        id,
+        name: "New Map",
+        type: "dungeon",
+        parentId: activeMapId || null,
+        imageUrl: "",
+        notes: "",
+        viewport: { x: 0, y: 0, zoom: 1 },
+      });
+    });
+    setEditingMapId(id);
+    setShowMapPanel(true);
+  }
+
+  function updateMap(mapId, patch) {
+    update((draft) => {
+      const map = draft.maps.find((m) => m.id === mapId);
+      if (!map) return;
+      Object.assign(map, patch);
+    });
+  }
+
+  function deleteMap(mapId) {
+    if (!ensureDmAccess()) return;
+    if (data.maps.length <= 1) return;
+    update((draft) => {
+      draft.maps = draft.maps.filter((m) => m.id !== mapId);
+      draft.tokens = draft.tokens.filter((t) => t.mapId !== mapId);
+      if (draft.ui.activeMapId === mapId) draft.ui.activeMapId = draft.maps[0]?.id || null;
+      if (draft.ui.forcedMapId === mapId) {
+        draft.ui.forcedMapId = null;
+        draft.ui.forcedViewEnabled = false;
+      }
+    });
+  }
+
+  function pushView(mapId) {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      draft.ui.forcedMapId = mapId;
+      draft.ui.forcedViewEnabled = true;
+    });
+  }
+
+  function releaseView() {
+    if (!ensureDmAccess()) return;
+    update((draft) => {
+      draft.ui.forcedMapId = null;
+      draft.ui.forcedViewEnabled = false;
+    });
+  }
+
+  function visibleInitiativeEntries() {
+    if (role === "dm") return data.initiative.entries;
+    return data.initiative.entries.filter((entry) => {
+      const entity = entitiesById[entry.entityId];
+      const token = data.tokens.find((t) => t.entityId === entry.entityId && t.mapId === activeMapId);
+      if (!entity || !token) return false;
+      if (claimedEntityId && entity.id === claimedEntityId) return true;
+      return entity.type === "PC" || token.visible;
+    });
+  }
+
+  if (showAuth) {
+    const noPasswordConfigured = !data.meta.localDmPassword;
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,#1e293b_0%,#0f172a_35%,#020617_100%)] text-slate-100 flex items-center justify-center p-6">
+        <div className="absolute inset-0 opacity-25 pointer-events-none" style={{ backgroundImage: "linear-gradient(rgba(250,204,21,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(250,204,21,0.05) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="relative w-full max-w-5xl grid lg:grid-cols-[1.2fr_0.8fr] rounded-[28px] overflow-hidden shadow-2xl border border-amber-300/10 bg-slate-950/80 backdrop-blur-xl">
+          <div className="p-10 md:p-12 border-b lg:border-b-0 lg:border-r border-white/10">
+            <div className="flex items-center gap-3 text-amber-300 mb-4">
+              <Sparkles className="w-5 h-5" />
+              <span className={`${mono} uppercase text-amber-200/80`}>Session Control Interface</span>
+            </div>
+            <h1 className={`${fantasyTitle} text-4xl md:text-5xl text-white leading-tight`}>
+              Lanternfall Tabletop
+            </h1>
+            <p className="mt-5 text-slate-300 max-w-xl leading-7">
+              A fast, dark-fantasy virtual tabletop built around strict Dungeon Master authority, player-safe visibility, map pushing, and encounter flow.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4 mt-8">
+              {[
+                [Crown, "Dungeon Master control", "Reveal, hide, push view, manage tokens, run initiative."],
+                [Users, "Player-safe interface", "Players only see what the DM explicitly reveals."],
+                [Map, "Hierarchical maps", "World, region, dungeon and encounter layers."],
+                [Swords, "Encounter ready", "Initiative tracker, presets, health and conditions."],
+              ].map(([Icon, title, body]) => (
+                <div key={title} className="rounded-2xl p-4 bg-white/5 border border-white/10 shadow-lg">
+                  <Icon className="w-5 h-5 text-amber-300 mb-3" />
+                  <div className="font-semibold text-slate-100">{title}</div>
+                  <div className="text-sm text-slate-400 mt-1 leading-6">{body}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 text-xs text-slate-500 leading-6">
+              Local auth mode is included for single-device or same-network play. Replace with backend-validated JWT or session auth before production deployment.
+            </div>
+          </div>
+          <div className="p-8 md:p-10 flex flex-col justify-center">
+            <div className="rounded-3xl border border-amber-300/10 bg-slate-900/80 p-6 shadow-2xl">
+              <div className="flex items-center gap-2 mb-5 text-slate-300">
+                <Lock className="w-4 h-4 text-amber-300" />
+                <span className={`${mono} uppercase`}>Entry Gate</span>
+              </div>
+              <label className="block text-sm text-slate-300 mb-2">
+                {noPasswordConfigured ? "Set DM password for local mode" : "Enter DM password"}
+              </label>
+              <input
+                type="password"
+                value={dmPasswordInput}
+                onChange={(e) => setDmPasswordInput(e.target.value)}
+                className="w-full rounded-2xl bg-slate-950 border border-white/10 px-4 py-3 outline-none focus:border-amber-300/40"
+                placeholder={noPasswordConfigured ? "Create local DM password" : "Password"}
+              />
+              <button onClick={doDmLogin} className="w-full mt-4 rounded-2xl py-3 bg-amber-300 text-slate-950 font-semibold hover:brightness-105 transition">
+                Enter DM Mode
+              </button>
+              <button onClick={enterPlayerMode} className="w-full mt-3 rounded-2xl py-3 bg-white/5 text-slate-100 border border-white/10 hover:bg-white/10 transition">
+                Continue as Player
+              </button>
+              <div className="mt-4 text-xs text-slate-500 leading-6">
+                No secret is hardcoded here. This is only a local fallback flow.
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#1e293b_0%,#0f172a_30%,#020617_100%)] text-slate-100 overflow-hidden">
+      <FantasyChrome />
+      <TopBar
+        role={role}
+        data={data}
+        syncOnline={syncOnline}
+        setMapTool={setMapTool}
+        mapTool={mapTool}
+        createEntity={createEntity}
+        startInitiative={startInitiative}
+        stopInitiative={stopInitiative}
+        savePreset={savePreset}
+        bulkVisibility={bulkVisibility}
+        exportSession={exportSession}
+        importSession={importSession}
+        logout={logout}
+        showMapPanel={showMapPanel}
+        setShowMapPanel={setShowMapPanel}
+        showPresetPanel={showPresetPanel}
+        setShowPresetPanel={setShowPresetPanel}
+        showInitiativePanel={showInitiativePanel}
+        setShowInitiativePanel={setShowInitiativePanel}
+      />
+
+      <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_360px] gap-4 p-4 h-[calc(100vh-84px)]">
+        {role === "dm" ? (
+          <>
+            <aside className={`${leftOpen ? "block" : "hidden xl:block"}`}>
+              <EntitySidebar
+                entities={filteredEntities}
+                data={data}
+                activeMapId={activeMapId}
+                selectedEntityId={selectedEntityId}
+                setSelectedEntityId={setSelectedEntityId}
+                setSelectedTokenId={setSelectedTokenId}
+                entitySearch={entitySearch}
+                setEntitySearch={setEntitySearch}
+                entityTypeFilter={entityTypeFilter}
+                setEntityTypeFilter={setEntityTypeFilter}
+                conditionFilter={conditionFilter}
+                setConditionFilter={setConditionFilter}
+                adjustHp={adjustHp}
+                toggleCondition={toggleCondition}
+                createEntity={createEntity}
+                setDragEntityId={setDragEntityId}
+                editingEntityId={editingEntityId}
+                setEditingEntityId={setEditingEntityId}
+                updateEntity={updateEntity}
+                deleteEntity={deleteEntity}
+              />
+            </aside>
+            <button onClick={() => setLeftOpen((v) => !v)} className="xl:hidden absolute left-3 top-[92px] z-30 rounded-xl border border-white/10 bg-slate-950/85 p-2 backdrop-blur">
+              <PanelLeft className="w-4 h-4" />
+            </button>
+          </>
+        ) : (
+          <aside className="hidden xl:block">
+            <PlayerSidebar
+              playerVisibleEntities={playerVisibleEntities}
+              claimedEntityId={claimedEntityId}
+              claimPc={claimPc}
+              createPcAsPlayer={createPcAsPlayer}
+              playerNameInput={playerNameInput}
+              setPlayerNameInput={setPlayerNameInput}
+            />
+          </aside>
+        )}
+
+        <main className="relative min-w-0">
+          <MapCanvas
+            role={role}
+            activeMap={activeMap}
+            breadcrumb={breadcrumb}
+            tokens={role === "dm" ? allTokensOnMapDm : tokensOnMap}
+            entitiesById={entitiesById}
+            selectedTokenId={selectedTokenId}
+            setSelectedTokenId={setSelectedTokenId}
+            setSelectedEntityId={setSelectedEntityId}
+            moveToken={moveToken}
+            removeToken={removeToken}
+            setTokenVisible={setTokenVisible}
+            dragEntityId={dragEntityId}
+            placeToken={placeToken}
+            canPlayerMoveToken={canPlayerMoveToken}
+            data={data}
+            setActiveMap={setActiveMap}
+            claimedEntityId={claimedEntityId}
+          />
+          {role === "player" && data.ui.forcedViewEnabled && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-amber-300 text-slate-950 px-4 py-2 text-sm font-semibold shadow-lg">
+              DM-controlled view active
+            </div>
+          )}
+        </main>
+
+        <aside className={`${rightOpen ? "block" : "hidden xl:block"}`}>
+          <RightRail
+            role={role}
+            data={data}
+            activeMap={activeMap}
+            selectedEntity={selectedEntity}
+            selectedToken={selectedToken}
+            entitiesById={entitiesById}
+            adjustHp={adjustHp}
+            setTokenVisible={setTokenVisible}
+            toggleCondition={toggleCondition}
+            showPresetPanel={showPresetPanel}
+            presets={data.presets}
+            loadPreset={loadPreset}
+            overwritePreset={overwritePreset}
+            deletePreset={deletePreset}
+            showMapPanel={showMapPanel}
+            maps={data.maps}
+            setActiveMap={setActiveMap}
+            createMap={createMap}
+            editingMapId={editingMapId}
+            setEditingMapId={setEditingMapId}
+            updateMap={updateMap}
+            deleteMap={deleteMap}
+            pushView={pushView}
+            releaseView={releaseView}
+            showInitiativePanel={showInitiativePanel}
+            visibleInitiativeEntries={visibleInitiativeEntries()}
+            currentIndex={data.initiative.currentIndex}
+            round={data.initiative.round}
+            activeInitiative={data.initiative.active}
+            advanceTurn={advanceTurn}
+            startInitiative={startInitiative}
+          />
+        </aside>
+
+        <button onClick={() => setRightOpen((v) => !v)} className="xl:hidden absolute right-3 top-[92px] z-30 rounded-xl border border-white/10 bg-slate-950/85 p-2 backdrop-blur">
+          <PanelRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FantasyChrome() {
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-0 opacity-[0.07]" style={{ backgroundImage: "linear-gradient(rgba(250,204,21,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(250,204,21,0.3) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.08),transparent_25%),radial-gradient(circle_at_bottom_left,rgba(96,165,250,0.08),transparent_28%)]" />
+    </>
+  );
+}
+
+function TopBar({ role, data, syncOnline, setMapTool, mapTool, createEntity, startInitiative, stopInitiative, savePreset, bulkVisibility, exportSession, importSession, logout, showMapPanel, setShowMapPanel, showPresetPanel, setShowPresetPanel, showInitiativePanel, setShowInitiativePanel }) {
+  const fileRef = useRef(null);
+  return (
+    <div className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
+      <div className="px-4 py-3 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3 mr-4">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-300/90 to-yellow-600/90 text-slate-950 flex items-center justify-center shadow-lg">
+            {role === "dm" ? <Crown className="w-5 h-5" /> : <Users className="w-5 h-5" />}
+          </div>
+          <div>
+            <div className={`${fantasyTitle} text-xl text-white`}>{data.meta.sessionName}</div>
+            <div className="text-xs text-slate-400 uppercase tracking-[0.22em]">{role === "dm" ? "Dungeon Master" : "Player View"}</div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 ml-auto">
+          <StatusPill icon={syncOnline ? Wifi : WifiOff} label={syncOnline ? "Realtime sync ready" : "Storage sync only"} tone={syncOnline ? "good" : "muted"} />
+          {role === "dm" && (
+            <>
+              <ToolbarButton icon={Move} label={`Tool: ${mapTool}`} onClick={() => setMapTool(mapTool === "select" ? "move" : "select")} />
+              <ToolbarButton icon={Plus} label="Entity" onClick={() => createEntity("Monster")} />
+              <ToolbarButton icon={Swords} label="Initiative" onClick={() => setShowInitiativePanel((v) => !v)} active={showInitiativePanel} />
+              <ToolbarButton icon={Map} label="Maps" onClick={() => setShowMapPanel((v) => !v)} active={showMapPanel} />
+              <ToolbarButton icon={ScrollText} label="Presets" onClick={() => setShowPresetPanel((v) => !v)} active={showPresetPanel} />
+              <ToolbarButton icon={Eye} label="Reveal All" onClick={() => bulkVisibility(true)} />
+              <ToolbarButton icon={EyeOff} label="Hide All" onClick={() => bulkVisibility(false)} />
+              <ToolbarButton icon={Save} label="Save Preset" onClick={savePreset} />
+              <ToolbarButton icon={RefreshCw} label="Roll Init" onClick={() => startInitiative(true)} />
+              <ToolbarButton icon={Skull} label="End Init" onClick={stopInitiative} />
+            </>
+          )}
+          <ToolbarButton icon={Download} label="Export" onClick={exportSession} />
+          <ToolbarButton icon={Upload} label="Import" onClick={() => fileRef.current?.click()} />
+          <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files?.[0] && importSession(e.target.files[0])} />
+          <ToolbarButton icon={LogOut} label="Logout" onClick={logout} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ icon: Icon, label, tone }) {
+  const toneCls = tone === "good" ? "text-emerald-300 bg-emerald-500/10 border-emerald-300/20" : "text-slate-300 bg-white/5 border-white/10";
+  return <div className={`rounded-full px-3 py-2 border text-xs flex items-center gap-2 ${toneCls}`}><Icon className="w-3.5 h-3.5" />{label}</div>;
+}
+
+function ToolbarButton({ icon: Icon, label, onClick, active }) {
+  return (
+    <button onClick={onClick} className={`rounded-2xl px-3 py-2 border text-sm transition flex items-center gap-2 ${active ? "bg-amber-300 text-slate-950 border-amber-200" : "bg-white/5 border-white/10 hover:bg-white/10 text-slate-100"}`}>
+      <Icon className="w-4 h-4" />
+      <span className="hidden md:inline">{label}</span>
+    </button>
+  );
+}
+
+function EntitySidebar({ entities, data, activeMapId, selectedEntityId, setSelectedEntityId, setSelectedTokenId, entitySearch, setEntitySearch, entityTypeFilter, setEntityTypeFilter, conditionFilter, setConditionFilter, adjustHp, toggleCondition, createEntity, setDragEntityId, editingEntityId, setEditingEntityId, updateEntity, deleteEntity }) {
+  const tokenMap = Object.fromEntries(data.tokens.filter((t) => t.mapId === activeMapId).map((t) => [t.entityId, t]));
+  return (
+    <div className="h-full rounded-[28px] border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="p-4 border-b border-white/10">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className={`${fantasyTitle} text-xl`}>Entities</div>
+            <div className="text-xs text-slate-400 uppercase tracking-[0.22em]">Roster & quick edits</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => createEntity("PC")} className="rounded-xl p-2 bg-sky-400/10 border border-sky-300/20 text-sky-200"><UserCircle2 className="w-4 h-4" /></button>
+            <button onClick={() => createEntity("NPC")} className="rounded-xl p-2 bg-amber-400/10 border border-amber-300/20 text-amber-200"><Users className="w-4 h-4" /></button>
+            <button onClick={() => createEntity("Monster")} className="rounded-xl p-2 bg-rose-400/10 border border-rose-300/20 text-rose-200"><Skull className="w-4 h-4" /></button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input value={entitySearch} onChange={(e) => setEntitySearch(e.target.value)} placeholder="Search entities" className="w-full rounded-2xl bg-white/5 border border-white/10 pl-9 pr-4 py-3 outline-none focus:border-amber-300/30" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select value={entityTypeFilter} onChange={(e) => setEntityTypeFilter(e.target.value)} className="rounded-2xl bg-white/5 border border-white/10 px-3 py-3 outline-none">
+              <option>ALL</option>
+              <option>PC</option>
+              <option>NPC</option>
+              <option>Monster</option>
+            </select>
+            <select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} className="rounded-2xl bg-white/5 border border-white/10 px-3 py-3 outline-none">
+              <option>ALL</option>
+              {CONDITIONS.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-3 space-y-3">
+        {entities.map((entity) => {
+          const token = tokenMap[entity.id];
+          const selected = selectedEntityId === entity.id;
+          return (
+            <motion.div
+              key={entity.id}
+              layout
+              draggable
+              onDragStart={() => setDragEntityId(entity.id)}
+              onDragEnd={() => setDragEntityId(null)}
+              onClick={() => {
+                setSelectedEntityId(entity.id);
+                if (token) setSelectedTokenId(token.id);
+              }}
+              className={`rounded-3xl border p-4 shadow-lg transition cursor-pointer ${selected ? "border-amber-300/50 bg-amber-300/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5"><ShapePreview type={entity.type} color={entity.color} /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-semibold text-slate-100 truncate">{entity.name}</div>
+                    <span className={`text-[10px] px-2 py-1 rounded-full border ${token ? token.visible ? "border-emerald-300/30 text-emerald-200 bg-emerald-500/10" : "border-slate-400/20 text-slate-400 bg-white/5" : "border-amber-300/30 text-amber-200 bg-amber-500/10"}`}>
+                      {token ? (token.visible ? "Visible" : "Hidden") : "Unplaced"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">{entityLabel(entity)}</div>
+                  <div className="mt-3 flex items-center gap-4 text-sm text-slate-300">
+                    <span className="inline-flex items-center gap-1"><Shield className="w-4 h-4 text-sky-300" /> {entity.AC}</span>
+                    <span className="inline-flex items-center gap-1"><Heart className="w-4 h-4 text-rose-300" /> {entity.hp.current}/{entity.hp.max}</span>
+                    <span className={`${mono} text-slate-400`}>Init +{entity.initiativeBonus}</span>
+                  </div>
+                  {!!entity.conditions.length && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {entity.conditions.map((c) => <span key={c} className="text-[10px] rounded-full border border-purple-300/20 bg-purple-400/10 px-2 py-1 text-purple-200">{c}</span>)}
+                    </div>
+                  )}
+                </div>
+                <GripVertical className="w-4 h-4 text-slate-500 shrink-0" />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mt-4">
+                <button onClick={(e) => { e.stopPropagation(); adjustHp(entity.id, -1); }} className="rounded-xl bg-rose-400/10 text-rose-200 border border-rose-300/20 py-2 text-sm">-1 HP</button>
+                <button onClick={(e) => { e.stopPropagation(); adjustHp(entity.id, +1); }} className="rounded-xl bg-emerald-400/10 text-emerald-200 border border-emerald-300/20 py-2 text-sm">+1 HP</button>
+                <button onClick={(e) => { e.stopPropagation(); setEditingEntityId(entity.id); }} className="rounded-xl bg-white/5 text-slate-200 border border-white/10 py-2 text-sm">Edit</button>
+              </div>
+
+              <AnimatePresence>
+                {editingEntityId === entity.id && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={entity.name} onChange={(e) => updateEntity(entity.id, { name: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" />
+                        <input value={entity.color} onChange={(e) => updateEntity(entity.id, { color: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" />
+                        <NumberField value={entity.AC} onChange={(v) => updateEntity(entity.id, { AC: v })} label="AC" />
+                        <NumberField value={entity.speed} onChange={(v) => updateEntity(entity.id, { speed: v })} label="Speed" />
+                        <NumberField value={entity.hp.current} onChange={(v) => updateEntity(entity.id, { hp: { ...entity.hp, current: v } })} label="HP Cur" />
+                        <NumberField value={entity.hp.max} onChange={(v) => updateEntity(entity.id, { hp: { ...entity.hp, max: v } })} label="HP Max" />
+                      </div>
+                      <textarea value={entity.notes || ""} onChange={(e) => updateEntity(entity.id, { notes: e.target.value })} rows={3} className="w-full rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Notes" />
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Conditions</div>
+                        <div className="flex flex-wrap gap-2">
+                          {CONDITIONS.map((c) => (
+                            <button key={c} onClick={() => toggleCondition(entity.id, c)} className={`rounded-full px-3 py-1 text-xs border ${entity.conditions.includes(c) ? "border-amber-300/30 bg-amber-500/10 text-amber-200" : "border-white/10 bg-white/5 text-slate-400"}`}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.keys(entity.stats || {}).map((key) => (
+                          <NumberField key={key} value={entity.stats[key]} onChange={(v) => updateEntity(entity.id, { stats: { ...entity.stats, [key]: v } })} label={key} />
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {entity.type === "PC" && (
+                          <>
+                            <input value={entity.class || ""} onChange={(e) => updateEntity(entity.id, { class: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Class" />
+                            <NumberField value={entity.level || 1} onChange={(v) => updateEntity(entity.id, { level: v })} label="Level" />
+                          </>
+                        )}
+                        {entity.type === "Monster" && (
+                          <>
+                            <input value={entity.CR || ""} onChange={(e) => updateEntity(entity.id, { CR: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="CR" />
+                            <input value={entity.abilities || ""} onChange={(e) => updateEntity(entity.id, { abilities: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Abilities" />
+                          </>
+                        )}
+                        {entity.type === "NPC" && (
+                          <>
+                            <input value={entity.faction || ""} onChange={(e) => updateEntity(entity.id, { faction: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Faction" />
+                            <input value={entity.role || ""} onChange={(e) => updateEntity(entity.id, { role: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Role" />
+                          </>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingEntityId(null)} className="flex-1 rounded-2xl border border-white/10 bg-white/5 py-2 text-sm">Done</button>
+                        <button onClick={() => deleteEntity(entity.id)} className="rounded-2xl border border-rose-300/20 bg-rose-500/10 text-rose-200 px-4 py-2 text-sm"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NumberField({ label, value, onChange }) {
+  return (
+    <label className="text-sm">
+      <div className="text-xs uppercase tracking-[0.16em] text-slate-500 mb-1">{label}</div>
+      <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" />
+    </label>
+  );
+}
+
+function ShapePreview({ type, color }) {
+  const shape = shapeForType(type);
+  return (
+    <div className="w-9 h-9 flex items-center justify-center">
+      {shape === "circle" && <div className="w-7 h-7 rounded-full border-2" style={{ background: `${color}33`, borderColor: color }} />}
+      {shape === "square" && <div className="w-7 h-7 rounded-md border-2" style={{ background: `${color}33`, borderColor: color }} />}
+      {shape === "diamond" && <div className="w-6 h-6 rotate-45 rounded-sm border-2" style={{ background: `${color}33`, borderColor: color }} />}
+    </div>
+  );
+}
+
+function PlayerSidebar({ playerVisibleEntities, claimedEntityId, claimPc, createPcAsPlayer, playerNameInput, setPlayerNameInput }) {
+  const claimable = playerVisibleEntities.filter((e) => e.type === "PC");
+  return (
+    <div className="h-full rounded-[28px] border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="p-4 border-b border-white/10">
+        <div className={`${fantasyTitle} text-xl`}>Player Panel</div>
+        <div className="text-xs text-slate-400 uppercase tracking-[0.22em]">Visible characters</div>
+      </div>
+      <div className="p-4 border-b border-white/10 space-y-3">
+        <input value={playerNameInput} onChange={(e) => setPlayerNameInput(e.target.value)} placeholder="Your name" className="w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-3 outline-none" />
+        <button onClick={createPcAsPlayer} className="w-full rounded-2xl py-3 bg-amber-300 text-slate-950 font-semibold">Create a PC</button>
+      </div>
+      <div className="p-4 overflow-auto space-y-3">
+        {claimable.map((e) => (
+          <button key={e.id} onClick={() => claimPc(e.id)} className={`w-full text-left rounded-3xl border p-4 ${claimedEntityId === e.id ? "border-amber-300/50 bg-amber-500/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+            <div className="font-semibold">{e.name}</div>
+            <div className="text-sm text-slate-400 mt-1">{e.class} {e.level}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MapCanvas({ role, activeMap, breadcrumb, tokens, entitiesById, selectedTokenId, setSelectedTokenId, setSelectedEntityId, moveToken, removeToken, setTokenVisible, dragEntityId, placeToken, canPlayerMoveToken, data, setActiveMap, claimedEntityId }) {
+  const canvasRef = useRef(null);
+  const [viewport, setViewport] = useState(() => activeMap?.viewport || { x: 0, y: 0, zoom: 1 });
+  const [draggingTokenId, setDraggingTokenId] = useState(null);
+  const [dragOrigin, setDragOrigin] = useState(null);
+  const [panning, setPanning] = useState(false);
+  const [panOrigin, setPanOrigin] = useState(null);
+
+  useEffect(() => {
+    setViewport(activeMap?.viewport || { x: 0, y: 0, zoom: 1 });
+  }, [activeMap?.id]);
+
+  function pointerToPercent(clientX, clientY) {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 50, y: 50 };
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    return { x: clamp(x, 0, 100), y: clamp(y, 0, 100) };
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    if (!dragEntityId || role !== "dm") return;
+    const pos = pointerToPercent(e.clientX, e.clientY);
+    placeToken(dragEntityId, pos.x, pos.y);
+  }
+
+  function startTokenDrag(e, token) {
+    const canMove = role === "dm" || canPlayerMoveToken(token);
+    if (!canMove) return;
+    e.stopPropagation();
+    setDraggingTokenId(token.id);
+    setDragOrigin({ x: token.x, y: token.y });
+  }
+
+  function onMouseMove(e) {
+    if (draggingTokenId) {
+      const pos = pointerToPercent(e.clientX, e.clientY);
+      moveToken(draggingTokenId, pos.x, pos.y);
+      return;
+    }
+    if (panning && panOrigin) {
+      const dx = e.clientX - panOrigin.startX;
+      const dy = e.clientY - panOrigin.startY;
+      setViewport((prev) => ({ ...prev, x: panOrigin.viewportX + dx / 8, y: panOrigin.viewportY + dy / 8 }));
+    }
+  }
+
+  function onMouseUp() {
+    setDraggingTokenId(null);
+    setDragOrigin(null);
+    setPanning(false);
+    setPanOrigin(null);
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    setViewport((prev) => ({ ...prev, zoom: clamp(prev.zoom + (e.deltaY < 0 ? 0.08 : -0.08), 0.7, 2.2) }));
+  }
+
+  function beginPan(e) {
+    if (e.target.dataset.token === "true") return;
+    setPanning(true);
+    setPanOrigin({ startX: e.clientX, startY: e.clientY, viewportX: viewport.x, viewportY: viewport.y });
+  }
+
+  if (!activeMap) return null;
+
+  return (
+    <div className="h-full rounded-[30px] border border-white/10 bg-slate-950/60 backdrop-blur-xl shadow-2xl overflow-hidden relative">
+      <div className="absolute z-20 top-3 left-3 right-3 flex items-center justify-between gap-3">
+        <div className="rounded-2xl bg-slate-950/80 backdrop-blur border border-white/10 px-3 py-2 flex items-center gap-2 flex-wrap shadow-lg">
+          {breadcrumb.map((m, idx) => (
+            <React.Fragment key={m.id}>
+              <button onClick={() => setActiveMap(m.id)} className={`text-sm ${idx === breadcrumb.length - 1 ? "text-amber-200" : "text-slate-400 hover:text-slate-200"}`}>{m.name}</button>
+              {idx < breadcrumb.length - 1 && <ChevronRight className="w-4 h-4 text-slate-500" />}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="rounded-2xl bg-slate-950/80 backdrop-blur border border-white/10 px-3 py-2 flex items-center gap-2 shadow-lg">
+          <Compass className="w-4 h-4 text-amber-300" />
+          <span className={`${mono} text-slate-300`}>Zoom {Math.round(viewport.zoom * 100)}%</span>
+        </div>
+      </div>
+
+      <div
+        ref={canvasRef}
+        className="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onMouseDown={beginPan}
+        onWheel={onWheel}
+      >
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: activeMap.imageUrl ? `url(${activeMap.imageUrl})` : "radial-gradient(circle at center, rgba(51,65,85,0.9), rgba(2,6,23,1))",
+            backgroundPosition: `${50 + viewport.x}% ${50 + viewport.y}%`,
+            backgroundSize: `${viewport.zoom * 100}%`,
+            backgroundRepeat: "no-repeat",
+            filter: role === "player" ? "saturate(0.95) contrast(1.02)" : "saturate(1.05)",
+            transform: "scale(1.01)",
+          }}
+        />
+
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:48px_48px] opacity-40" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent" />
+
+        {tokens.map((token) => {
+          const entity = entitiesById[token.entityId];
+          if (!entity) return null;
+          const selected = selectedTokenId === token.id;
+          const shape = shapeForType(entity.type);
+          const canMove = role === "dm" || canPlayerMoveToken(token);
+          const isClaimed = claimedEntityId === entity.id;
+          return (
+            <motion.div
+              key={token.id}
+              layout
+              data-token="true"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: selected ? 1.08 : 1, opacity: 1 }}
+              className="absolute"
+              style={{ left: `${token.x}%`, top: `${token.y}%`, transform: "translate(-50%, -50%)" }}
+              onMouseDown={(e) => startTokenDrag(e, token)}
+              onDoubleClick={() => {
+                setSelectedTokenId(token.id);
+                setSelectedEntityId(entity.id);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedTokenId(token.id);
+                setSelectedEntityId(entity.id);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (role === "dm") removeToken(token.id);
+              }}
+            >
+              <div className="relative group">
+                <div className={`absolute inset-0 blur-xl ${selected ? "opacity-90" : "opacity-50"}`} style={{ background: entity.color, borderRadius: 999 }} />
+                <div
+                  className={`relative w-11 h-11 md:w-12 md:h-12 flex items-center justify-center border-2 shadow-2xl backdrop-blur cursor-pointer ${canMove ? "cursor-grab" : "cursor-default"} ${shape === "circle" ? "rounded-full" : shape === "square" ? "rounded-xl" : "rotate-45 rounded-md"}`}
+                  style={{ background: `${entity.color}33`, borderColor: selected ? "#facc15" : entity.color }}
+                >
+                  <div className={`${shape === "diamond" ? "-rotate-45" : ""} text-[10px] font-bold text-white select-none`}>{entity.name.slice(0, 2).toUpperCase()}</div>
+                </div>
+                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-slate-950/90 px-2.5 py-1 text-[11px] text-slate-200 shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none">
+                  {entity.name}
+                </div>
+                {role === "dm" && (
+                  <button onClick={(e) => { e.stopPropagation(); setTokenVisible(token.id, !token.visible); }} className="absolute -top-2 -right-2 rounded-full p-1.5 border border-white/10 bg-slate-950/90 text-slate-100 shadow-lg">
+                    {token.visible ? <Eye className="w-3.5 h-3.5 text-emerald-300" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
+                  </button>
+                )}
+                {isClaimed && <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-300 border-2 border-slate-950" />}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RightRail({ role, data, activeMap, selectedEntity, selectedToken, entitiesById, adjustHp, setTokenVisible, toggleCondition, showPresetPanel, presets, loadPreset, overwritePreset, deletePreset, showMapPanel, maps, setActiveMap, createMap, editingMapId, setEditingMapId, updateMap, deleteMap, pushView, releaseView, showInitiativePanel, visibleInitiativeEntries, currentIndex, round, activeInitiative, advanceTurn, startInitiative }) {
+  return (
+    <div className="h-full rounded-[28px] border border-white/10 bg-slate-950/70 backdrop-blur-xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="p-4 border-b border-white/10">
+        <div className={`${fantasyTitle} text-xl`}>{role === "dm" ? "Control Panels" : "Session Details"}</div>
+        <div className="text-xs text-slate-400 uppercase tracking-[0.22em]">Token, maps, presets, initiative</div>
+      </div>
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        <TokenDetailCard role={role} entity={selectedEntity} token={selectedToken} adjustHp={adjustHp} setTokenVisible={setTokenVisible} toggleCondition={toggleCondition} />
+        {showInitiativePanel && <InitiativePanel entries={visibleInitiativeEntries} currentIndex={currentIndex} round={round} active={activeInitiative} advanceTurn={advanceTurn} role={role} startInitiative={startInitiative} entitiesById={entitiesById} />}
+        {showMapPanel && <MapManager role={role} activeMap={activeMap} maps={maps} setActiveMap={setActiveMap} createMap={createMap} editingMapId={editingMapId} setEditingMapId={setEditingMapId} updateMap={updateMap} deleteMap={deleteMap} pushView={pushView} releaseView={releaseView} forcedMapId={data.ui.forcedMapId} forcedViewEnabled={data.ui.forcedViewEnabled} />}
+        {showPresetPanel && <PresetPanel role={role} presets={presets} loadPreset={loadPreset} overwritePreset={overwritePreset} deletePreset={deletePreset} />}
+      </div>
+    </div>
+  );
+}
+
+function TokenDetailCard({ role, entity, token, adjustHp, setTokenVisible, toggleCondition }) {
+  if (!entity) {
+    return (
+      <div className="rounded-3xl border border-dashed border-white/10 p-6 bg-white/5 text-slate-400 text-sm">
+        Select a token or entity to inspect details.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <ShapePreview type={entity.type} color={entity.color} />
+            <div>
+              <div className="text-lg font-semibold">{entity.name}</div>
+              <div className="text-sm text-slate-400">{entityLabel(entity)}</div>
+            </div>
+          </div>
+        </div>
+        {token && role === "dm" && (
+          <button onClick={() => setTokenVisible(token.id, !token.visible)} className={`rounded-full px-3 py-2 text-xs border ${token.visible ? "border-emerald-300/30 text-emerald-200 bg-emerald-500/10" : "border-white/10 text-slate-300 bg-white/5"}`}>
+            {token.visible ? "Visible to players" : "Hidden from players"}
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mt-5 text-sm">
+        <StatBox icon={Shield} label="AC" value={entity.AC} />
+        <StatBox icon={Heart} label="HP" value={`${entity.hp.current}/${entity.hp.max}`} />
+        <StatBox icon={Move} label="Speed" value={entity.speed} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        {Object.entries(entity.stats || {}).slice(0, 6).map(([k, v]) => (
+          <div key={k} className="rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-center">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{k}</div>
+            <div className="text-sm font-semibold mt-1">{v}</div>
+            <div className="text-xs text-slate-400">{modFromStat(v) >= 0 ? "+" : ""}{modFromStat(v)}</div>
+          </div>
+        ))}
+      </div>
+
+      {role === "dm" && (
+        <div className="grid grid-cols-4 gap-2 mt-4">
+          <button onClick={() => adjustHp(entity.id, -1)} className="rounded-2xl py-2 bg-rose-500/10 border border-rose-300/20 text-rose-200 text-sm">-1</button>
+          <button onClick={() => adjustHp(entity.id, -5)} className="rounded-2xl py-2 bg-rose-500/10 border border-rose-300/20 text-rose-200 text-sm">-5</button>
+          <button onClick={() => adjustHp(entity.id, +1)} className="rounded-2xl py-2 bg-emerald-500/10 border border-emerald-300/20 text-emerald-200 text-sm">+1</button>
+          <button onClick={() => adjustHp(entity.id, +5)} className="rounded-2xl py-2 bg-emerald-500/10 border border-emerald-300/20 text-emerald-200 text-sm">+5</button>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Conditions</div>
+        <div className="flex flex-wrap gap-2">
+          {CONDITIONS.map((c) => {
+            const active = entity.conditions.includes(c);
+            return (
+              <button key={c} onClick={() => role === "dm" && toggleCondition(entity.id, c)} className={`rounded-full px-3 py-1.5 text-xs border ${active ? "border-amber-300/30 bg-amber-500/10 text-amber-200" : "border-white/10 bg-white/5 text-slate-400"} ${role !== "dm" ? "cursor-default" : ""}`}>
+                {c}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {!!entity.notes && <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3 text-sm text-slate-300 leading-6">{entity.notes}</div>}
+    </div>
+  );
+}
+
+function StatBox({ icon: Icon, label, value }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+      <div className="flex items-center gap-2 text-slate-400 text-xs uppercase tracking-[0.16em]"><Icon className="w-3.5 h-3.5" />{label}</div>
+      <div className="mt-2 text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function InitiativePanel({ entries, currentIndex, round, active, advanceTurn, role, startInitiative, entitiesById }) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-lg font-semibold">Initiative</div>
+          <div className="text-sm text-slate-400">Round {round}</div>
+        </div>
+        {role === "dm" && (
+          <div className="flex gap-2">
+            {!active && <button onClick={() => startInitiative(true)} className="rounded-2xl px-3 py-2 bg-amber-300 text-slate-950 text-sm font-semibold">Roll</button>}
+            {active && <button onClick={advanceTurn} className="rounded-2xl px-3 py-2 bg-amber-300 text-slate-950 text-sm font-semibold">Advance</button>}
+          </div>
+        )}
+      </div>
+      <div className="mt-4 space-y-2">
+        {entries.length === 0 && <div className="text-sm text-slate-400">No active initiative order.</div>}
+        {entries.map((entry, index) => {
+          const entity = entitiesById[entry.entityId];
+          if (!entity) return null;
+          return (
+            <div key={entry.id} className={`rounded-2xl border px-3 py-3 flex items-center justify-between ${active && index === currentIndex ? "border-amber-300/40 bg-amber-500/10" : "border-white/10 bg-slate-950/50"}`}>
+              <div className="flex items-center gap-3 min-w-0">
+                <ShapePreview type={entity.type} color={entity.color} />
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{entity.name}</div>
+                  <div className="text-xs text-slate-400">Init bonus +{entity.initiativeBonus}</div>
+                </div>
+              </div>
+              <div className={`${mono} text-slate-200`}>{entry.roll}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MapManager({ role, activeMap, maps, setActiveMap, createMap, editingMapId, setEditingMapId, updateMap, deleteMap, pushView, releaseView, forcedMapId, forcedViewEnabled }) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-lg font-semibold">Map Manager</div>
+          <div className="text-sm text-slate-400">Nested maps and forced view</div>
+        </div>
+        {role === "dm" && <button onClick={createMap} className="rounded-2xl px-3 py-2 bg-amber-300 text-slate-950 text-sm font-semibold">New Map</button>}
+      </div>
+      <div className="mt-4 space-y-3">
+        {maps.map((map) => {
+          const active = activeMap?.id === map.id;
+          const editing = editingMapId === map.id;
+          return (
+            <div key={map.id} className={`rounded-3xl border p-4 ${active ? "border-amber-300/40 bg-amber-500/10" : "border-white/10 bg-slate-950/50"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <button onClick={() => setActiveMap(map.id)} className="font-semibold text-left">{map.name}</button>
+                  <div className="text-xs text-slate-400 mt-1 uppercase tracking-[0.18em]">{map.type}</div>
+                </div>
+                {role === "dm" && (
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingMapId(editing ? null : map.id)} className="rounded-xl p-2 bg-white/5 border border-white/10"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => deleteMap(map.id)} className="rounded-xl p-2 bg-rose-500/10 border border-rose-300/20 text-rose-200"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                {forcedViewEnabled && forcedMapId === map.id ? (
+                  <button onClick={releaseView} className="rounded-full px-3 py-1.5 text-xs bg-amber-300 text-slate-950 font-semibold">Release player view</button>
+                ) : role === "dm" ? (
+                  <button onClick={() => pushView(map.id)} className="rounded-full px-3 py-1.5 text-xs border border-white/10 bg-white/5">Push to players</button>
+                ) : null}
+              </div>
+              <AnimatePresence>
+                {editing && role === "dm" && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="pt-4 mt-4 border-t border-white/10 grid gap-2">
+                      <input value={map.name} onChange={(e) => updateMap(map.id, { name: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Map name" />
+                      <input value={map.type} onChange={(e) => updateMap(map.id, { type: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Map type" />
+                      <input value={map.imageUrl || ""} onChange={(e) => updateMap(map.id, { imageUrl: e.target.value })} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Image URL" />
+                      <textarea value={map.notes || ""} onChange={(e) => updateMap(map.id, { notes: e.target.value })} rows={3} className="rounded-2xl bg-slate-950 border border-white/10 px-3 py-2" placeholder="Map notes" />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PresetPanel({ role, presets, loadPreset, overwritePreset, deletePreset }) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl">
+      <div className="text-lg font-semibold">Encounter Presets</div>
+      <div className="text-sm text-slate-400">Saved token positions and visibility states</div>
+      <div className="mt-4 space-y-3">
+        {presets.length === 0 && <div className="text-sm text-slate-400">No presets saved yet.</div>}
+        {presets.map((preset) => (
+          <div key={preset.id} className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+            <div className="font-medium">{preset.name}</div>
+            <div className="text-xs text-slate-400 mt-1">{preset.tokens.length} token states</div>
+            {role === "dm" && (
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                <button onClick={() => loadPreset(preset.id)} className="rounded-2xl py-2 bg-amber-300 text-slate-950 text-sm font-semibold">Load</button>
+                <button onClick={() => overwritePreset(preset.id)} className="rounded-2xl py-2 border border-white/10 bg-white/5 text-sm">Overwrite</button>
+                <button onClick={() => deletePreset(preset.id)} className="rounded-2xl py-2 border border-rose-300/20 bg-rose-500/10 text-rose-200 text-sm">Delete</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return <AppShell />;
+}
